@@ -1,4 +1,4 @@
-<script>
+<!-- <script>
   import { onDestroy } from 'svelte';
   import { 
     timerState, 
@@ -82,6 +82,106 @@
           body: 'Work session complete! Time for a break.' 
         });
         startTimer(); // Automatically start break timer
+      }
+    }
+  }
+  
+  function formatTime(seconds) {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  }
+  
+  onDestroy(() => {
+    if (timer) clearInterval(timer);
+  });
+</script> -->
+
+
+<script>
+  import { onDestroy } from 'svelte';
+  import { 
+    timerState, 
+    remainingTime, 
+    currentTask, 
+    currentCategory,
+    TimerState, 
+    WORK_DURATION, 
+    BREAK_DURATION 
+  } from '../stores/timer';
+  import { saveSession } from '../stores/sessions';
+  
+  let timer = null;
+  let startTime = 0;
+  
+  const categories = ['Work', 'Study', 'Health', 'Personal', 'Other'];
+  
+  function startTimer() {
+    if ($timerState === TimerState.IDLE || $timerState === TimerState.PAUSED) {
+      if ($timerState === TimerState.IDLE) {
+        startTime = Date.now();
+      }
+      
+      $timerState = TimerState.RUNNING;
+      
+      timer = setInterval(() => {
+        $remainingTime -= 1;
+        
+        if ($remainingTime <= 0) {
+          handleTimerComplete();
+        }
+      }, 1000);
+    }
+  }
+  
+  function pauseTimer() {
+    if ($timerState === TimerState.RUNNING) {
+      $timerState = TimerState.PAUSED;
+      clearInterval(timer);
+      timer = null;
+    }
+  }
+  
+  function resetTimer() {
+    clearInterval(timer);
+    timer = null;
+    $timerState = TimerState.IDLE;
+    $remainingTime = WORK_DURATION;
+    startTime = 0;
+  }
+  
+  async function handleTimerComplete() {
+    clearInterval(timer);
+    timer = null;
+    
+    // Check if we just finished a work session
+    if ($timerState === TimerState.RUNNING && $remainingTime <= 0) {
+      // Save completed work session
+      if ($remainingTime <= 0 && $timerState !== TimerState.BREAK) {
+        const endTime = Date.now();
+        await saveSession({
+          task_name: $currentTask,
+          category: $currentCategory,
+          start_time: Math.floor(startTime / 1000),
+          end_time: Math.floor(endTime / 1000),
+        });
+        
+        // Switch to break mode
+        $timerState = TimerState.BREAK;
+        $remainingTime = BREAK_DURATION;
+        // Notify user of break
+        new Notification('Pomodoro Timer', { 
+          body: 'Work session complete! Time for a break.' 
+        });
+      } 
+      // If we just finished a break session
+      else if ($remainingTime <= 0 && $timerState === TimerState.BREAK) {
+        $timerState = TimerState.IDLE;
+        $remainingTime = WORK_DURATION;
+        // Notify user of work session
+        new Notification('Pomodoro Timer', { 
+          body: 'Break is over. Time to work!' 
+        });
       }
     }
   }
